@@ -167,6 +167,61 @@ DEFINE_GUID(IID_IDirect3D11CaptureFramePoolStatics2, 0x589b103f, 0x6bbc, 0x5df5,
 DEFINE_GUID(IID_IDirect3D11CaptureFramePoolHandler,  0x51a947f7, 0x79cf, 0x5a3e, 0xa3, 0xa5, 0x12, 0x89, 0xcf, 0xa6, 0xdf, 0xe8);
 DEFINE_GUID(IID_IDirect3DDxgiInterfaceAccess,        0xa9b3d012, 0x3df2, 0x4ee3, 0xb8, 0xd1, 0x86, 0x95, 0xf4, 0x57, 0xd3, 0xc1);
 
+// Fallback definitions for IGraphicsCaptureSession5 and IGraphicsCaptureSession6 (for older Windows SDKs)
+#ifndef ____x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5_FWD_DEFINED__
+#define ____x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5_FWD_DEFINED__
+typedef interface __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5 __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5;
+
+typedef struct __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5Vtbl
+{
+    BEGIN_INTERFACE
+    HRESULT (STDMETHODCALLTYPE* QueryInterface)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5* This, REFIID riid, void** ppvObject);
+    ULONG (STDMETHODCALLTYPE* AddRef)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5* This);
+    ULONG (STDMETHODCALLTYPE* Release)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5* This);
+    HRESULT (STDMETHODCALLTYPE* GetIids)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5* This, ULONG* iidCount, IID** iids);
+    HRESULT (STDMETHODCALLTYPE* GetRuntimeClassName)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5* This, HSTRING* className);
+    HRESULT (STDMETHODCALLTYPE* GetTrustLevel)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5* This, TrustLevel* trustLevel);
+    HRESULT (STDMETHODCALLTYPE* get_MinUpdateInterval)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5* This, __x_ABI_CWindows_CFoundation_CTimeSpan* value);
+    HRESULT (STDMETHODCALLTYPE* put_MinUpdateInterval)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5* This, __x_ABI_CWindows_CFoundation_CTimeSpan value);
+    END_INTERFACE
+} __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5Vtbl;
+
+interface __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5
+{
+    CONST_VTBL struct __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5Vtbl* lpVtbl;
+};
+
+#define __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5_Release(This) ((This)->lpVtbl->Release(This))
+#define __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession5_put_MinUpdateInterval(This, value) ((This)->lpVtbl->put_MinUpdateInterval(This, value))
+#endif
+
+#ifndef ____x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6_FWD_DEFINED__
+#define ____x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6_FWD_DEFINED__
+typedef interface __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6 __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6;
+
+typedef struct __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6Vtbl
+{
+    BEGIN_INTERFACE
+    HRESULT (STDMETHODCALLTYPE* QueryInterface)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6* This, REFIID riid, void** ppvObject);
+    ULONG (STDMETHODCALLTYPE* AddRef)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6* This);
+    ULONG (STDMETHODCALLTYPE* Release)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6* This);
+    HRESULT (STDMETHODCALLTYPE* GetIids)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6* This, ULONG* iidCount, IID** iids);
+    HRESULT (STDMETHODCALLTYPE* GetRuntimeClassName)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6* This, HSTRING* className);
+    HRESULT (STDMETHODCALLTYPE* GetTrustLevel)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6* This, TrustLevel* trustLevel);
+    HRESULT (STDMETHODCALLTYPE* get_IncludeSecondaryWindows)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6* This, boolean* value);
+    HRESULT (STDMETHODCALLTYPE* put_IncludeSecondaryWindows)(__x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6* This, boolean value);
+    END_INTERFACE
+} __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6Vtbl;
+
+interface __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6
+{
+    CONST_VTBL struct __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6Vtbl* lpVtbl;
+};
+
+#define __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6_Release(This) ((This)->lpVtbl->Release(This))
+#define __x_ABI_CWindows_CGraphics_CCapture_CIGraphicsCaptureSession6_put_IncludeSecondaryWindows(This, value) ((This)->lpVtbl->put_IncludeSecondaryWindows(This, value))
+#endif
+
 static HRESULT STDMETHODCALLTYPE ScreenCapture__FrameQueryInterface(__FITypedEventHandler_2_Windows__CGraphics__CCapture__CDirect3D11CaptureFramePool_IInspectable* This, REFIID Riid, void** Object)
 {
 	if (Object == NULL)
