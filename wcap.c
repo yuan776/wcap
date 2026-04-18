@@ -53,6 +53,9 @@ __declspec(dllexport) DWORD NvOptimusEnablement = 1;
 #define WCAP_VIDEO_UPDATE_TIMER     2
 #define WCAP_VIDEO_UPDATE_INTERVAL  100 // msec
 
+#define WCAP_TIME_DISPLAY_TIMER     3
+#define WCAP_TIME_DISPLAY_INTERVAL  1000 // msec
+
 #define CMD_WCAP     1
 #define CMD_QUIT     2
 #define CMD_SETTINGS 3
@@ -60,6 +63,7 @@ __declspec(dllexport) DWORD NvOptimusEnablement = 1;
 #define HOT_RECORD_WINDOW  1
 #define HOT_RECORD_MONITOR 2
 #define HOT_RECORD_REGION  3
+#define HOT_PAUSE_RESUME   4
 
 #define WCAP_RESIZE_NONE 0
 #define WCAP_RESIZE_TL   1
@@ -99,6 +103,10 @@ static UINT64 gRecordingNextEncode;
 static UINT64 gRecordingNextTooltip;
 static EXECUTION_STATE gRecordingState;
 static WCHAR gRecordingPath[MAX_PATH];
+static BOOL gRecordingPaused;
+static UINT64 gRecordingPauseTime;       // When pause started (QPC ticks)
+static UINT64 gRecordingTotalPausedTime; // Cumulative paused duration
+static RECT gRecordingBorderRect;        // Border window position for recording
 
 // when selecting rectangle to record
 static HMONITOR gRectMonitor;
@@ -270,6 +278,9 @@ static void StartRecording(ID3D11Device* Device, HWND Window)
 	gRecordingNextEncode = 0;
 	gRecordingLastFrame = 0;
 	gRecordingDroppedFrames = 0;
+	gRecordingPaused = FALSE;
+	gRecordingPauseTime = 0;
+	gRecordingTotalPausedTime = 0;
 	ScreenCapture_Start(&gCapture, gConfig.MouseCursor, gConfig.ShowRecordingBorder, gConfig.IncludeSecondaryWindows);
 
 	if (gConfig.CaptureAudio)
@@ -277,6 +288,7 @@ static void StartRecording(ID3D11Device* Device, HWND Window)
 		SetTimer(gWindow, WCAP_AUDIO_CAPTURE_TIMER, WCAP_AUDIO_CAPTURE_INTERVAL, NULL);
 	}
 	SetTimer(gWindow, WCAP_VIDEO_UPDATE_TIMER, WCAP_VIDEO_UPDATE_INTERVAL, NULL);
+	SetTimer(gWindow, WCAP_TIME_DISPLAY_TIMER, WCAP_TIME_DISPLAY_INTERVAL, NULL);
 
 	UpdateTrayIcon(gIcon2);
 	gRecordingState = SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED);
@@ -290,6 +302,12 @@ static void EncodeCapturedAudio(void)
 	if (gEncoder.StartTime == 0)
 	{
 		// we don't know when first video frame starts yet
+		return;
+	}
+
+	if (gRecordingPaused)
+	{
+		// Skip audio encoding when paused
 		return;
 	}
 
@@ -324,7 +342,8 @@ static void EncodeCapturedAudio(void)
 		if (FramesToEncode != 0)
 		{
 			Assert(Data.Time >= gEncoder.StartTime);
-			Encoder_NewSamples(&gEncoder, Data.Samples, FramesToEncode, Data.Time, gTickFreq.QuadPart);
+			UINT64 AdjustedTime = Data.Time - gRecordingTotalPausedTime;
+			Encoder_NewSamples(&gEncoder, Data.Samples, FramesToEncode, AdjustedTime, gTickFreq.QuadPart);
 		}
 		AudioCapture_ReleaseData(&gAudio, &Data);
 	}
@@ -343,6 +362,7 @@ static void StopRecording(void)
 		AudioCapture_Stop(&gAudio);
 	}
 	KillTimer(gWindow, WCAP_VIDEO_UPDATE_TIMER);
+	KillTimer(gWindow, WCAP_TIME_DISPLAY_TIMER);
 
 	ScreenCapture_Stop(&gCapture);
 	Encoder_Stop(&gEncoder);
@@ -461,7 +481,33 @@ static void CaptureWindow(void)
 		return;
 	}
 
+	// Get window rect for border overlay
+	RECT WindowRect;
+	if (gConfig.OnlyClientArea)
+	{
+		GetClientRect(Window, &WindowRect);
+		MapWindowPoints(Window, NULL, (LPPOINT)&WindowRect, 2);
+	}
+	else
+	{
+		GetWindowRect(Window, &WindowRect);
+	}
+
 	StartRecording(Device, Window);
+
+	if (gRecording)
+	{
+		LONG ExStyle = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST;
+		SetWindowLongW(gWindow, GWL_EXSTYLE, ExStyle);
+		SetLayeredWindowAttributes(gWindow, RGB(255, 0, 255), 0, LWA_COLORKEY);
+
+		int X = WindowRect.left - (WCAP_RECT_BORDER + 1);
+		int Y = WindowRect.top - (WCAP_RECT_BORDER + 1);
+		int W = (WindowRect.right - WindowRect.left) + 2 * (WCAP_RECT_BORDER + 1);
+		int H = (WindowRect.bottom - WindowRect.top) + 2 * (WCAP_RECT_BORDER + 1);
+		SetWindowPos(gWindow, HWND_TOPMOST, X, Y, W, H, SWP_SHOWWINDOW);
+		InvalidateRect(gWindow, NULL, FALSE);
+	}
 }
 
 static void CaptureMonitor(void)
@@ -476,6 +522,9 @@ static void CaptureMonitor(void)
 		return;
 	}
 
+	MONITORINFO Info = { .cbSize = sizeof(Info) };
+	GetMonitorInfoW(Monitor, &Info);
+
 	ID3D11Device* Device = CreateDevice();
 	if (!Device)
 	{
@@ -489,6 +538,20 @@ static void CaptureMonitor(void)
 	}
 
 	StartRecording(Device, NULL);
+
+	if (gRecording)
+	{
+		LONG ExStyle = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST;
+		SetWindowLongW(gWindow, GWL_EXSTYLE, ExStyle);
+		SetLayeredWindowAttributes(gWindow, RGB(255, 0, 255), 0, LWA_COLORKEY);
+
+		int X = Info.rcMonitor.left - (WCAP_RECT_BORDER + 1);
+		int Y = Info.rcMonitor.top - (WCAP_RECT_BORDER + 1);
+		int W = (Info.rcMonitor.right - Info.rcMonitor.left) + 2 * (WCAP_RECT_BORDER + 1);
+		int H = (Info.rcMonitor.bottom - Info.rcMonitor.top) + 2 * (WCAP_RECT_BORDER + 1);
+		SetWindowPos(gWindow, HWND_TOPMOST, X, Y, W, H, SWP_SHOWWINDOW);
+		InvalidateRect(gWindow, NULL, FALSE);
+	}
 }
 
 static void CaptureRegionInit(void)
@@ -610,10 +673,6 @@ static void CaptureRegion(void)
 		.bottom = gRectSelection[1].y,
 	};
 
-	LONG ExStyle = WS_EX_LAYERED | WS_EX_TRANSPARENT;
-	SetWindowLongW(gWindow, GWL_EXSTYLE, ExStyle);
-	SetLayeredWindowAttributes(gWindow, RGB(255, 0, 255), 0, LWA_COLORKEY);
-
 	ID3D11Device* Device = CreateDevice();
 	if (!Device)
 	{
@@ -632,6 +691,10 @@ static void CaptureRegion(void)
 
 	if (gRecording)
 	{
+		LONG ExStyle = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST;
+		SetWindowLongW(gWindow, GWL_EXSTYLE, ExStyle);
+		SetLayeredWindowAttributes(gWindow, RGB(255, 0, 255), 0, LWA_COLORKEY);
+
 		int X = Info.rcMonitor.left + Rect.left - (WCAP_RECT_BORDER + 1);
 		int Y = Info.rcMonitor.top + Rect.top - (WCAP_RECT_BORDER + 1);
 		int W = Rect.right - Rect.left + 2 * (WCAP_RECT_BORDER + 1);
@@ -692,6 +755,7 @@ void DisableHotKeys(void)
 	UnregisterHotKey(gWindow, HOT_RECORD_MONITOR);
 	UnregisterHotKey(gWindow, HOT_RECORD_WINDOW);
 	UnregisterHotKey(gWindow, HOT_RECORD_REGION);
+	UnregisterHotKey(gWindow, HOT_PAUSE_RESUME);
 }
 
 BOOL EnableHotKeys(void)
@@ -708,6 +772,10 @@ BOOL EnableHotKeys(void)
 	if (gConfig.ShortcutRegion)
 	{
 		Success = Success && RegisterHotKey(gWindow, HOT_RECORD_REGION, HOT_GET_MOD(gConfig.ShortcutRegion), HOT_GET_KEY(gConfig.ShortcutRegion));
+	}
+	if (gConfig.ShortcutPauseResume)
+	{
+		Success = Success && RegisterHotKey(gWindow, HOT_PAUSE_RESUME, HOT_GET_MOD(gConfig.ShortcutPauseResume), HOT_GET_KEY(gConfig.ShortcutPauseResume));
 	}
 	return Success;
 }
@@ -956,6 +1024,11 @@ static LRESULT CALLBACK WindowProc(HWND Window, UINT Message, WPARAM WParam, LPA
 				Encoder_Update(&gEncoder, Time.QuadPart, gTickFreq.QuadPart);
 				return 0;
 			}
+			else if (WParam == WCAP_TIME_DISPLAY_TIMER)
+			{
+				InvalidateRect(gWindow, NULL, FALSE);
+				return 0;
+			}
 		}
 	}
 	else if (Message == WM_POWERBROADCAST)
@@ -1040,6 +1113,31 @@ static LRESULT CALLBACK WindowProc(HWND Window, UINT Message, WPARAM WParam, LPA
 	}
 	else if (Message == WM_HOTKEY)
 	{
+		if (WParam == HOT_PAUSE_RESUME)
+		{
+			if (gRecording)
+			{
+				LARGE_INTEGER Now;
+				QueryPerformanceCounter(&Now);
+
+				if (gRecordingPaused)
+				{
+					// Resume: accumulate paused time
+					gRecordingTotalPausedTime += Now.QuadPart - gRecordingPauseTime;
+					gRecordingPaused = FALSE;
+					UpdateTrayIcon(gIcon2);
+				}
+				else
+				{
+					// Pause: record pause start time
+					gRecordingPauseTime = Now.QuadPart;
+					gRecordingPaused = TRUE;
+					UpdateTrayIcon(gIcon1);
+				}
+				InvalidateRect(gWindow, NULL, FALSE);
+			}
+			return 0;
+		}
 		if (gRecording)
 		{
 			StopRecording();
@@ -1255,7 +1353,7 @@ static LRESULT CALLBACK WindowProc(HWND Window, UINT Message, WPARAM WParam, LPA
 				RECT Rect;
 				GetClientRect(Window, &Rect);
 
-				HBRUSH BorderBrush = CreateSolidBrush(RGB(255, 255, 0));
+				HBRUSH BorderBrush = CreateSolidBrush(gRecordingPaused ? RGB(255, 165, 0) : RGB(255, 255, 0));
 				Assert(BorderBrush);
 				FillRect(Context, &Rect, BorderBrush);
 				DeleteObject(BorderBrush);
@@ -1271,6 +1369,38 @@ static LRESULT CALLBACK WindowProc(HWND Window, UINT Message, WPARAM WParam, LPA
 				DeleteObject(ColorKeyBrush);
 
 				FrameRect(Context, &Rect, GetStockObject(BLACK_BRUSH));
+
+				// Calculate and display elapsed time
+				if (gEncoder.StartTime != 0)
+				{
+					LARGE_INTEGER Now;
+					QueryPerformanceCounter(&Now);
+					UINT64 ElapsedTicks = Now.QuadPart - gEncoder.StartTime - gRecordingTotalPausedTime;
+					if (gRecordingPaused)
+					{
+						ElapsedTicks -= (Now.QuadPart - gRecordingPauseTime);
+					}
+					DWORD ElapsedSeconds = (DWORD)(ElapsedTicks / gTickFreq.QuadPart);
+					DWORD Minutes = ElapsedSeconds / 60;
+					DWORD Seconds = ElapsedSeconds % 60;
+
+					WCHAR TimeText[64];
+					int TimeLen;
+					if (gRecordingPaused)
+					{
+						TimeLen = StrFormat(TimeText, L"|| %02u:%02u", Minutes, Seconds);
+					}
+					else
+					{
+						TimeLen = StrFormat(TimeText, L"> %02u:%02u", Minutes, Seconds);
+					}
+
+					SelectObject(Context, gFontBold);
+					SetTextAlign(Context, TA_TOP | TA_LEFT);
+					SetTextColor(Context, RGB(0, 0, 0));
+					SetBkMode(Context, TRANSPARENT);
+					ExtTextOutW(Context, WCAP_RECT_BORDER + 4, 0, 0, NULL, TimeText, TimeLen, NULL);
+				}
 			}
 
 			EndBufferedPaint(BufferedPaint, TRUE);
@@ -1288,6 +1418,12 @@ static bool OnCaptureFrame(ScreenCapture* Capture, ScreenCaptureFrame* Frame)
 	if (Frame == NULL)
 	{
 		PostMessageW(gWindow, WM_WCAP_STOP_CAPTURE, 0, 0);
+		return true;
+	}
+
+	if (gRecordingPaused)
+	{
+		// Continue capture but skip encoding when paused
 		return true;
 	}
 
@@ -1318,7 +1454,8 @@ static bool OnCaptureFrame(ScreenCapture* Capture, ScreenCaptureFrame* Frame)
 
 	if (DoEncode)
 	{
-		if (!Encoder_NewFrame(&gEncoder, Frame->Texture, Frame->Rect, Frame->Time, gTickFreq.QuadPart))
+		UINT64 AdjustedTime = Frame->Time - gRecordingTotalPausedTime;
+		if (!Encoder_NewFrame(&gEncoder, Frame->Texture, Frame->Rect, AdjustedTime, gTickFreq.QuadPart))
 		{
 			// TODO: maybe highlight tray icon when droppped frames are increasing too much?
 			gRecordingDroppedFrames++;
@@ -1331,7 +1468,8 @@ static bool OnCaptureFrame(ScreenCapture* Capture, ScreenCaptureFrame* Frame)
 
 		if (gConfig.EnableLimitLength)
 		{
-			if (Frame->Time - gEncoder.StartTime >= (UINT64)(gConfig.LimitLength * gTickFreq.QuadPart))
+			UINT64 AdjustedElapsed = Frame->Time - gEncoder.StartTime - gRecordingTotalPausedTime;
+			if (AdjustedElapsed >= (UINT64)(gConfig.LimitLength * gTickFreq.QuadPart))
 			{
 				Stop = TRUE;
 			}

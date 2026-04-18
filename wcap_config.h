@@ -56,6 +56,7 @@ typedef struct
 	DWORD ShortcutMonitor;
 	DWORD ShortcutWindow;
 	DWORD ShortcutRegion;
+	DWORD ShortcutPauseResume;
 }
 Config;
 
@@ -119,6 +120,7 @@ static BOOL Config_ShowDialog(Config* C);
 #define ID_SHORTCUT_MONITOR        400
 #define ID_SHORTCUT_WINDOW         410
 #define ID_SHORTCUT_REGION         420
+#define ID_SHORTCUT_PAUSE_RESUME   430
 
 // control types
 #define ITEM_CHECKBOX (1<<0)
@@ -143,7 +145,7 @@ static BOOL Config_ShowDialog(Config* C);
 #define COL11W 130
 #define ROW0H 98
 #define ROW1H 124
-#define ROW2H 56
+#define ROW2H 70
 
 #define PADDING 4             // padding for dialog and group boxes
 #define BUTTON_WIDTH 50       // normal button width
@@ -379,6 +381,9 @@ static void Config__SetDialogValues(HWND Window, Config* C)
 	Config__FormatKey(C->ShortcutRegion, Text);
 	SetDlgItemTextW(Window, ID_SHORTCUT_REGION, Text);
 	SetWindowLongW(GetDlgItem(Window, ID_SHORTCUT_REGION), GWLP_USERDATA, C->ShortcutRegion);
+	Config__FormatKey(C->ShortcutPauseResume, Text);
+	SetDlgItemTextW(Window, ID_SHORTCUT_PAUSE_RESUME, Text);
+	SetWindowLongW(GetDlgItem(Window, ID_SHORTCUT_PAUSE_RESUME), GWLP_USERDATA, C->ShortcutPauseResume);
 
 	EnableWindow(GetDlgItem(Window, ID_GPU_ENCODER + 1),  C->HardwareEncoder);
 	EnableWindow(GetDlgItem(Window, ID_LIMIT_LENGTH + 1), C->EnableLimitLength);
@@ -527,9 +532,10 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 				C->AudioBitrate = gAudioBitrates[SendDlgItemMessageW(Window, ID_AUDIO_BITRATE, CB_GETCURSEL, 0, 0)];
 			}
 			// shortcuts
-			C->ShortcutMonitor = GetWindowLongW(GetDlgItem(Window, ID_SHORTCUT_MONITOR), GWLP_USERDATA);
-			C->ShortcutWindow  = GetWindowLongW(GetDlgItem(Window, ID_SHORTCUT_WINDOW),  GWLP_USERDATA);
-			C->ShortcutRegion  = GetWindowLongW(GetDlgItem(Window, ID_SHORTCUT_REGION),  GWLP_USERDATA);
+			C->ShortcutMonitor     = GetWindowLongW(GetDlgItem(Window, ID_SHORTCUT_MONITOR),      GWLP_USERDATA);
+			C->ShortcutWindow      = GetWindowLongW(GetDlgItem(Window, ID_SHORTCUT_WINDOW),       GWLP_USERDATA);
+			C->ShortcutRegion      = GetWindowLongW(GetDlgItem(Window, ID_SHORTCUT_REGION),       GWLP_USERDATA);
+			C->ShortcutPauseResume = GetWindowLongW(GetDlgItem(Window, ID_SHORTCUT_PAUSE_RESUME), GWLP_USERDATA);
 
 			EndDialog(Window, TRUE);
 			return TRUE;
@@ -612,7 +618,8 @@ static LRESULT CALLBACK Config__DialogProc(HWND Window, UINT Message, WPARAM WPa
 		}
 		else if ((Control == ID_SHORTCUT_MONITOR ||
 		          Control == ID_SHORTCUT_WINDOW ||
-		          Control == ID_SHORTCUT_REGION) && HIWORD(WParam) == BN_CLICKED)
+		          Control == ID_SHORTCUT_REGION ||
+		          Control == ID_SHORTCUT_PAUSE_RESUME) && HIWORD(WParam) == BN_CLICKED)
 		{
 			if (gConfigShortcut.Control == 0)
 			{
@@ -883,6 +890,7 @@ void Config_Defaults(Config* C)
 		.ShortcutMonitor = HOT_KEY(VK_SNAPSHOT, MOD_CONTROL),
 		.ShortcutWindow = HOT_KEY(VK_SNAPSHOT, MOD_CONTROL | MOD_WIN),
 		.ShortcutRegion = HOT_KEY(VK_SNAPSHOT, MOD_CONTROL | MOD_SHIFT),
+		.ShortcutPauseResume = HOT_KEY('P', MOD_CONTROL | MOD_ALT),
 	};
 
 	LPWSTR VideoFolder;
@@ -991,9 +999,10 @@ void Config_Load(Config* C, LPCWSTR FileName)
 	Config__GetInt(FileName, L"AudioSamplerate",        &C->AudioSamplerate, gAudioSamplerates);
 	Config__GetInt(FileName, L"AudioBitrate",           &C->AudioBitrate,    gAudioBitrates);
 	// shortcuts
-	Config__GetInt(FileName, L"ShortcutMonitor", &C->ShortcutMonitor, NULL);
-	Config__GetInt(FileName, L"ShortcutWindow",  &C->ShortcutWindow,  NULL);
-	Config__GetInt(FileName, L"ShortcutRect",    &C->ShortcutRegion,  NULL);
+	Config__GetInt(FileName, L"ShortcutMonitor",     &C->ShortcutMonitor,     NULL);
+	Config__GetInt(FileName, L"ShortcutWindow",      &C->ShortcutWindow,      NULL);
+	Config__GetInt(FileName, L"ShortcutRect",        &C->ShortcutRegion,      NULL);
+	Config__GetInt(FileName, L"ShortcutPauseResume", &C->ShortcutPauseResume, NULL);
 
 	Config__ValidateVideoProfile(C);
 }
@@ -1040,9 +1049,10 @@ void Config_Save(Config* C, LPCWSTR FileName)
 	Config__WriteInt(FileName, L"AudioSamplerate", C->AudioSamplerate);
 	Config__WriteInt(FileName, L"AudioBitrate",    C->AudioBitrate);
 	// shortcuts
-	Config__WriteInt(FileName, L"ShortcutMonitor", C->ShortcutMonitor);
-	Config__WriteInt(FileName, L"ShortcutWindow",  C->ShortcutWindow);
-	Config__WriteInt(FileName, L"ShortcutRect",    C->ShortcutRegion);
+	Config__WriteInt(FileName, L"ShortcutMonitor",     C->ShortcutMonitor);
+	Config__WriteInt(FileName, L"ShortcutWindow",      C->ShortcutWindow);
+	Config__WriteInt(FileName, L"ShortcutRect",        C->ShortcutRegion);
+	Config__WriteInt(FileName, L"ShortcutPauseResume", C->ShortcutPauseResume);
 }
 
 BOOL Config_ShowDialog(Config* C)
@@ -1122,9 +1132,10 @@ BOOL Config_ShowDialog(Config* C)
 				.Rect = { 0, ROW0H + ROW1H, COL00W + PADDING + COL01W, ROW2H },
 				.Items = (Config__DialogItem[])
 				{
-					{ "Capture Monitor", ID_SHORTCUT_MONITOR, ITEM_HOTKEY, 64 },
-					{ "Capture Window",  ID_SHORTCUT_WINDOW,  ITEM_HOTKEY, 64 },
-					{ "Capture Region",  ID_SHORTCUT_REGION,  ITEM_HOTKEY, 64 },
+					{ "Capture Monitor", ID_SHORTCUT_MONITOR,      ITEM_HOTKEY, 64 },
+					{ "Capture Window",  ID_SHORTCUT_WINDOW,       ITEM_HOTKEY, 64 },
+					{ "Capture Region",  ID_SHORTCUT_REGION,       ITEM_HOTKEY, 64 },
+					{ "Pause/Resume",    ID_SHORTCUT_PAUSE_RESUME, ITEM_HOTKEY, 64 },
 					{ NULL },
 				},
 			},
