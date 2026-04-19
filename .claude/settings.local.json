@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd /c build.cmd)",
+      "Bash(cd:*)",
+      "Bash(build.cmd)",
+      "Bash(D:/src/wcap/build.cmd:*)",
+      "Bash(git -C D:/src/wcap status)",
+      "Bash(git -C D:/src/wcap diff)",
+      "Bash(git -C D:/src/wcap log --oneline -5)",
+      "Bash(git -C D:/src/wcap add wcap.c wcap_config.h)",
+      "Bash(git -C D:/src/wcap commit -m \"$\\(cat <<''EOF''\nAdd pause/resume recording and elapsed time display\n\n- Ctrl+Alt+P hotkey to pause/resume recording\n- Border overlay shows elapsed time \\(MM:SS format\\)\n- Border turns orange when paused, yellow when recording\n- Time excludes paused duration\n- Show border overlay for all capture modes \\(window/monitor/region\\)\n- Configurable pause shortcut in Settings dialog\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C D:/src/wcap log --oneline -3)",
+      "Bash(ls:*)",
+      "Bash(dir:*)",
+      "Bash(tasklist:*)",
+      "Bash(git -C D:/src/wcap diff --stat)",
+      "Bash(git -C D:/src/wcap add wcap_screen_capture.h)",
+      "Bash(git -C D:/src/wcap commit -m \"$\\(cat <<''EOF''\nAdd fallback definitions for IGraphicsCaptureSession5/6\n\nFor older Windows SDKs that don''t include these newer WinRT interfaces.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(gh repo create:*)",
+      "Bash(git -C D:/src/wcap remote -v)",
+      "Bash(git -C D:/src/wcap remote add:*)",
+      "Bash(git -C D:/src/wcap push -u yuan776 yuyuan/add_pause)"
+    ]
+  }
+}
