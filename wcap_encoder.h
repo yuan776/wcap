@@ -132,14 +132,12 @@ static HRESULT STDMETHODCALLTYPE Encoder__VideoInvoke(IMFAsyncCallback* this, IM
 	IUnknown_Release(Object);
 	// keep Sample object reference count incremented to reuse for new frame submission
 
-	for (size_t Index = 0; Index < ARRAYSIZE(Enc->VideoSample); Index++)
+	// Get the sample index from the sample's attributes (set in Encoder_NewFrame)
+	UINT32 Index = 0;
+	if (SUCCEEDED(IMFSample_GetUINT32(Sample, &MF_MT_USER_DATA, &Index)) && Index < ARRAYSIZE(Enc->VideoSample))
 	{
-		if (Sample == Enc->VideoSample[Index])
-		{
-			atomic_fetch_or(&Enc->VideoSampleAvailable, 1ULL << Index);
-			WakeByAddressSingle((PVOID)&Enc->VideoSampleAvailable);
-			break;
-		}
+		atomic_fetch_or(&Enc->VideoSampleAvailable, 1ULL << Index);
+		WakeByAddressSingle((PVOID)&Enc->VideoSampleAvailable);
 	}
 
 	return S_OK;
@@ -852,9 +850,12 @@ BOOL Encoder_NewFrame(Encoder* Encoder, ID3D11Texture2D* Texture, RECT Rect, UIN
 		IMFSample_DeleteItem(Sample, &MFSampleExtension_Discontinuity);
 	}
 
+	// Store the sample index in sample attributes so the callback can identify it
+	HR(IMFSample_SetUINT32(Sample, &MF_MT_USER_DATA, Index));
+
 	IMFTrackedSample* Tracked;
 	HR(IMFSample_QueryInterface(Sample, &IID_IMFTrackedSample, (LPVOID*)&Tracked));
-	IMFTrackedSample_SetAllocator(Tracked, &Encoder->VideoSampleCallback, NULL);
+	HR(IMFTrackedSample_SetAllocator(Tracked, &Encoder->VideoSampleCallback, (IUnknown*)Sample));
 	IMFTrackedSample_Release(Tracked);
 
 	// submit to encoder which will happen in background
